@@ -19,7 +19,8 @@ def create_app():
     jwt.init_app(app)
 
     with app.app_context():
-        db.engine.connect()
+        from app.models.user import User
+        # db.create_all()
 
     @app.route('/')
     def home():
