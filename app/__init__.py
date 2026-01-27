@@ -1,11 +1,14 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
+from werkzeug.security import generate_password_hash,check_password_hash
 from dotenv import load_dotenv
 import os
 
 db=SQLAlchemy()
 jwt=JWTManager()
+migrate=Migrate()
 
 def create_app():
     load_dotenv()
@@ -17,6 +20,7 @@ def create_app():
 
     db.init_app(app)
     jwt.init_app(app)
+    migrate.init_app(app, db)
 
     with app.app_context():
         from app.models.user import User
