@@ -1,6 +1,7 @@
 from flask import Blueprint,request,jsonify
 from app import db
 from app.models.user import User
+from flask_jwt_extended import create_access_token,get_jwt_identity,jwt_required
 
 auth_bp=Blueprint('auth',__name__)
 
@@ -49,12 +50,28 @@ def login():
     if not user or not user.check_password(password):
         return jsonify({'message':'Invalid credentials'}),401
     
+    access_token=create_access_token(identity=str(user.id))
+    
     return jsonify({
-        'message':'Login successful',
+        'access_token':access_token,
         'user':{
             'id':user.id,
             'name':user.name,
             'email':user.email,
             'role':user.role
         }
+    })
+
+
+@auth_bp.route('/protected',methods=['GET'])
+@jwt_required()
+def protected():
+    current_user_id=get_jwt_identity()
+    current_user=User.query.get(current_user_id)
+
+    return jsonify({
+        "id":current_user.id,
+        "name":current_user.name,
+        "email":current_user.email,
+        "role":current_user.role
     })
