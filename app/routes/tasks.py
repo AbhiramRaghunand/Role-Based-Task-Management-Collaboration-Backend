@@ -35,24 +35,46 @@ def view_task():
     current_user_id=int(get_jwt_identity())
     current_user=User.query.get(current_user_id)
 
+    page=request.args.get("page",1,type=int)
+    limit=request.args.get("limit",5,type=int)
+
+    if page<1:
+        page=1
+    if limit<1:
+        limit=5
+
+    base_query=None
+
     if current_user.role=="ADMIN":
-        tasks=Task.query.all()
+        base_query=Task.query
 
     elif current_user.role=="MANAGER":
-        tasks=Task.query.filter_by(created_by=current_user.id).all()
+        base_query=Task.query.filter_by(created_by=current_user.id)
     else:
-        tasks=Task.query.filter_by(assigned_to=current_user.id).all()
+        base_query=Task.query.filter_by(assigned_to=current_user.id)
+
+    total_count=base_query.count()
+
+    tasks=base_query.offset((page-1)* limit).limit(limit).all()
 
 
-    return jsonify([
-        {
-        "id":t.id,
-        "title":t.title,
-        "status":t.status,
-        "assigned_to":t.assigned_to,
-        "created_by":t.created_by
-        }for t in tasks
-    ]),200
+
+    return jsonify({
+        "page":page,
+        "limit":limit,
+        "total_tasks":total_count,
+        "total_pages":(total_count+limit-1)//limit,
+        "offset":(page-1)*limit,
+        "data":[
+            {
+            "id":t.id,
+            "title":t.title,
+            "status":t.status,
+            "assigned_to":t.assigned_to,
+            "created_by":t.created_by
+            }for t in tasks
+        ]
+    }),200
 
 @tasks_bp.route('/tasks/<int:task_id>/status',methods=['PATCH'])
 @role_required('USER','MANAGER','ADMIN')
