@@ -10,6 +10,7 @@ class Task(db.Model):
     status=db.Column(db.String(20),default="PENDING",nullable=False)
     created_by=db.Column(db.Integer,nullable=False)
     created_at=db.Column(db.DateTime,default=datetime.now())
+    assigned_to=db.Column(db.Integer,db.ForeignKey("users.id"),nullable=True)
 
     def __repr__(self):
         return f"<Task {self.title} - Status: {self.status}>"

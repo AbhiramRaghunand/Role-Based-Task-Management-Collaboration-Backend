@@ -72,7 +72,38 @@ def update_task(task_id):
         "new_status":new_status
     }),200
 
+@tasks_bp.route('/tasks/<task_id>/assign', methods=["PUT"])
+@role_required("MANAGER","ADMIN")
+def assign_task(task_id):
+    data=request.get_json(silent=True)
 
+    if not data or "user_id" not in data:
+        return jsonify({
+            "error":"user_id required"
+        }),400
+    
+    task=Task.query.get(task_id)
+    if not task:
+        return jsonify({
+            "error":"Task not found"
+        }),404
+    
+    from app.models.user import User
+    user=User.query.get(data['user_id'])
+
+    if not user:
+        return jsonify({
+            "error":"User not found"
+        }),404
+    
+    task.assigned_to=user.id
+    db.session.commit()
+
+    return jsonify({
+        "message":"Task Assigned successfully",
+        "task_id":task.id,
+        "assigned_to":task.assigned_to
+    }),200
     
 
 
