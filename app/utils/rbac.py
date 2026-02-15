@@ -1,6 +1,7 @@
 from functools import wraps
 from flask import jsonify
 from flask_jwt_extended import verify_jwt_in_request,get_jwt_identity
+from app.utils.response import success_response,error_response
 
 
 def role_required(*allowed_roles):
@@ -18,7 +19,10 @@ def role_required(*allowed_roles):
             user=User.query.get(int(user_id))
 
             if not user:
-                return jsonify({"Error":"User not found"}),401
+                return error_response(
+                    message="User not found",
+                    status_code=404
+                )
             
             #Admin override
             if user.role=="admin":
@@ -26,7 +30,10 @@ def role_required(*allowed_roles):
             
             #role check
             if user.role not in allowed_roles:
-                return jsonify({"Error":"Access denied"}),403
+                return error_response(
+                    message="Access Denied",
+                    status_code=404
+                )
             
             return fn(*args,**kwargs)
         return wrapper
