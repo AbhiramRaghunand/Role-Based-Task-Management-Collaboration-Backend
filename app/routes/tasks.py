@@ -31,12 +31,28 @@ def create_task():
 @tasks_bp.route('/tasks',methods=['GET'])
 @role_required('USER','MANAGER','ADMIN')
 def view_task():
-    tasks=Task.query.all()
+    from app.models.user import User
+    current_user_id=int(get_jwt_identity())
+    current_user=User.query.get(current_user_id)
 
-    return jsonify({
-        "message":"Task details",
-        "tasks": [task.__repr__() for task in tasks]
-    }),200
+    if current_user.role=="ADMIN":
+        tasks=Task.query.all()
+
+    elif current_user.role=="MANAGER":
+        tasks=Task.query.filter_by(created_by=current_user.id).all()
+    else:
+        tasks=Task.query.filter_by(assigned_to=current_user.id).all()
+
+
+    return jsonify([
+        {
+        "id":t.id,
+        "title":t.title,
+        "status":t.status,
+        "assigned_to":t.assigned_to,
+        "created_by":t.created_by
+        }for t in tasks
+    ]),200
 
 @tasks_bp.route('/tasks/<int:task_id>/status',methods=['PATCH'])
 @role_required('USER','MANAGER','ADMIN')
