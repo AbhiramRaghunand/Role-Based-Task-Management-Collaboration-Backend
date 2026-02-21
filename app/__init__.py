@@ -6,6 +6,7 @@ from werkzeug.security import generate_password_hash,check_password_hash
 from app.routes.tasks import tasks_bp
 from app.routes.admin import admin_bp
 from dotenv import load_dotenv
+from app.utils.response import error_response
 import os
 
 jwt=JWTManager()
@@ -34,6 +35,18 @@ def create_app():
     app.register_blueprint(tasks_bp)
     from app.routes.admin import admin_bp
     app.register_blueprint(admin_bp)  
+
+    @app.errorhandler(404)
+    def not_found_error(error):
+        return error_response('Resource not found',404)
+    
+    @app.errorhandler(500)
+    def internal_error(error):
+        return error_response('Internal Server Error',500)
+    
+    @app.errorhandler(400)
+    def bad_request_error(error):
+        return error_response('Bad request',400)
 
     @app.route('/')
     def home():
