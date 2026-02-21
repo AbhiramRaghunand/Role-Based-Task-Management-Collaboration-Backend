@@ -57,8 +57,41 @@ def view_task():
     else:
         base_query=Task.query.filter_by(assigned_to=current_user.id)
 
+    #status filter
+    status=request.args.get("status")
+    if status:
+        status=status.upper()
+        allowed_status=['PENDING','IN_PROGRESS','DONE']
+        if status not in allowed_status:
+            return error_response("Invalid status filter",400)
+        base_query=base_query.filter_by(status=status)
+
+    #Sorting
+    sort_field=request.args.get('sort','created_at',type=str)
+    order=request.args.get('order','desc',type=str)
+
+    #allowed fields
+    allowed_sort_fields=['created_at','title','status']
+    if sort_field not in allowed_sort_fields:
+        return error_response("Invalid sort field",400)
+    
+    if order not in ["asc","desc"]:
+        return error_response("Invalid sort order",400)
+    
+    #get column
+    column=getattr(Task,sort_field)
+
+    if order=='desc':
+        column=column.desc()
+    else:
+        column=column.asc()
+
+    base_query=base_query.order_by(column)
+
+    #count before pagination
     total_count=base_query.count()
 
+    #pagination
     tasks=base_query.offset((page-1)* limit).limit(limit).all()
 
 
