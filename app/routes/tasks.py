@@ -6,6 +6,7 @@ from app.models.tasks import Task
 from app import db
 from enum import Enum
 from app.utils.response import success_response,error_response
+from datetime import datetime
 
 
 tasks_bp=Blueprint('tasks',__name__)
@@ -50,12 +51,12 @@ def view_task():
     base_query=None
 
     if current_user.role=="ADMIN":
-        base_query=Task.query
+        base_query=Task.query.filter_by(is_deleted=False)
 
     elif current_user.role=="MANAGER":
-        base_query=Task.query.filter_by(created_by=current_user.id)
+        base_query=Task.query.filter_by(created_by=current_user.id,is_deleted=False)
     else:
-        base_query=Task.query.filter_by(assigned_to=current_user.id)
+        base_query=Task.query.filter_by(assigned_to=current_user.id,is_deleted=False)
 
     #status filter
     status=request.args.get("status")
@@ -137,7 +138,7 @@ def update_task(task_id):
             status_code=400
         )
     
-    task=Task.query.get(task_id)
+    task=Task.query.filter_by(id=task_id,is_deleted=False)
 
     if not task:
         return error_response(
@@ -165,7 +166,7 @@ def assign_task(task_id):
             status_code=400
         )
     
-    task=Task.query.get(task_id)
+    task=Task.query.filter_by(id=task_id,is_deleted=False)
     if not task:
         return error_response(
             message="Task not found",
@@ -190,6 +191,30 @@ def assign_task(task_id):
         status_code=200
     )
 
+@tasks_bp.route('/tasks/<task_id>/delete',methods=['DELETE'])
+@role_required("MANAGER","ADMIN")
+def delete_task(task_id):
+
+    from app.models.user import User
+    current_user_id=int(get_jwt_identity())
+    current_user=User.query.get(current_user_id)
+
+    task=Task.query.filter_by(id=task_id,is_deleted=False).first()
+
+    if current_user.role=="MANAGER" and task.created_by!=current_user.id:
+        return error_response("Not allowed to delete this task",403)
     
+    if not task:
+        return error_response("Task not found",404)
+    
+    task.is_deleted=True
+    task.deleted_at=datetime.now()
+    db.session.commit()
+
+    return success_response(
+        message="Task deleted successfully ",
+        data={"task_id":task.id},
+        status_code=200
+    )
 
 

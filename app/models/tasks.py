@@ -11,6 +11,8 @@ class Task(db.Model):
     created_by=db.Column(db.Integer,nullable=False)
     created_at=db.Column(db.DateTime,default=datetime.now())
     assigned_to=db.Column(db.Integer,db.ForeignKey("users.id"),nullable=True)
+    is_deleted=db.Column(db.Boolean,default=False,nullable=False)
+    deleted_at=db.Column(db.DateTime,default=datetime.now(),nullable=True)
 
     def __repr__(self):
         return f"<Task {self.title} - Status: {self.status}>"
