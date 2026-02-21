@@ -3,9 +3,11 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity
 from app.utils.rbac import role_required
 from app.models.tasks import Task
+from app.models.audit import TaskAudit
 from app import db
 from enum import Enum
 from app.utils.response import success_response,error_response
+from app.utils.audit import log_task_action
 from datetime import datetime
 
 
@@ -15,16 +17,19 @@ tasks_bp=Blueprint('tasks',__name__)
 @role_required('MANAGER','ADMIN')
 def create_task():
     data=request.get_json(silent=True)
+    current_user_id=int(get_jwt_identity())
     if not data or "title" not in data:
         return error_response(message="Title is required",status_code=400)
     
     task=Task(
         title=data["title"],
         description=data.get("description"),
-        created_by=int(get_jwt_identity())
+        created_by=current_user_id
     )
     from app import db
     db.session.add(task)
+    db.session.flush()
+    log_task_action(task.id,"CREATE",current_user_id)
     db.session.commit()
 
     return success_response(
@@ -123,6 +128,8 @@ def view_task():
 def update_task(task_id):
     data=request.get_json(silent=True)
 
+    current_user_id=int(get_jwt_identity())
+
     if not data or "status" not in data:
         return error_response(
             message="Status required",
@@ -147,11 +154,12 @@ def update_task(task_id):
         )
     
     task.status=new_status
+    log_task_action(task_id,"UPDATE_STATUS",current_user_id)
     db.session.commit()
 
     return success_response(
         message="Task status updated successfully",
-        data={"task_id":task.id,"new_status":new_status},
+        data={"task_id":task_id,"new_status":new_status},
         status_code=200
     )
 
@@ -159,7 +167,7 @@ def update_task(task_id):
 @role_required("MANAGER","ADMIN")
 def assign_task(task_id):
     data=request.get_json(silent=True)
-
+    current_user_id=int(get_jwt_identity())
     if not data or "user_id" not in data:
         return error_response(
             message="User_id required",
@@ -183,11 +191,12 @@ def assign_task(task_id):
         )
     
     task.assigned_to=user.id
+    log_task_action(task_id,"ASSIGN",current_user_id)
     db.session.commit()
 
     return success_response(
         message="Task assigned successfully",
-        data={"task_id":task.id,"assigned_to":task.assigned_to},
+        data={"task_id":task_id,"assigned_to":task.assigned_to},
         status_code=200
     )
 
@@ -209,6 +218,7 @@ def delete_task(task_id):
     
     task.is_deleted=True
     task.deleted_at=datetime.now()
+    log_task_action(task_id,"DELETE",current_user_id)
     db.session.commit()
 
     return success_response(
@@ -216,9 +226,12 @@ def delete_task(task_id):
         data={"task_id":task.id},
         status_code=200
     )
+
+
 @tasks_bp.route("/tasks/<int:task_id>/restore",methods=["PATCH"])
 @role_required("ADMIN")
 def restore(task_id):
+    current_user_id=int(get_jwt_identity())
     task=Task.query.filter_by(id=task_id,is_deleted=True).first()
 
     if not task:
@@ -227,6 +240,7 @@ def restore(task_id):
     
     task.is_deleted=False
     task.deleted_at=None
+    log_task_action(task_id,"RESTORE",current_user_id)
     db.session.commit()
 
     return success_response(
@@ -234,4 +248,34 @@ def restore(task_id):
         data={"task_id":task_id},
         status_code=200
     )
+
+@tasks_bp.route('/tasks/<int:task_id>/audit',methods=['GET'])
+@role_required("ADMIN")
+def veiw_audit(task_id):
+
+    task=Task.query.filter_by(id=task_id).first()
+    if not task:
+        return error_response("Task not found",404)
+    
+    audits=TaskAudit.query.filter_by(task_id=task_id).order_by(TaskAudit.timestamp.desc()).all()
+
+    audit_data=[
+        {
+            "action":audit.action,
+            "performed_by":audit.performed_by,
+            "timestamp":audit.timestamp
+        }
+        for audit in audits
+    ]
+
+    return success_response(
+        message="Audit history fetched successfully",
+        data={
+            "task_id":task_id,
+            "audit_logs":audit_data
+        },
+        status_code=200
+    )
+
+
 
