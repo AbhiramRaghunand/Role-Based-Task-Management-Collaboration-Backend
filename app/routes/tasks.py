@@ -216,5 +216,22 @@ def delete_task(task_id):
         data={"task_id":task.id},
         status_code=200
     )
+@tasks_bp.route("/tasks/<int:task_id>/restore",methods=["PATCH"])
+@role_required("ADMIN")
+def restore(task_id):
+    task=Task.query.filter_by(id=task_id,is_deleted=True).first()
 
+    if not task:
+        return error_response("Task not found",404)
+    
+    
+    task.is_deleted=False
+    task.deleted_at=None
+    db.session.commit()
+
+    return success_response(
+        message="Task restored successfully",
+        data={"task_id":task_id},
+        status_code=200
+    )
 
