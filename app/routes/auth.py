@@ -14,6 +14,8 @@ def signup():
     email=data.get('email')
     password=data.get('password')
     role=data.get('role','USER')
+    manager_id=data.get('manager_id',None)
+
 
     if not all([name,email,password]):
         return error_response(
@@ -21,10 +23,31 @@ def signup():
             status_code=400
         )
     
+    if role=="USER":
+        if not manager_id:
+            return error_response("Manager ID required",400)
+        
+        manager=User.query.get(manager_id)
+
+        if not manager:
+            return error_response("Manager not found",404)
+        
+        if manager.role!="MANAGER":
+            return error_response("Assigned manager must have MANAGER role",400)
+        
+    if role=="MANAGER" and manager_id:
+        return error_response("Manager cannot have a manager",400)
+    
+    if role=="ADMIN" and manager_id:
+        return error_response("Admin cannot have a manager",400)
+
+
+    
     user=User(
         name=name,
         email=email,
-        role=role
+        role=role,
+        manager_id=manager_id
     )
     user.set_password(password)
     

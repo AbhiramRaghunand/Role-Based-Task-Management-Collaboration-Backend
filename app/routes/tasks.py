@@ -4,15 +4,18 @@ from flask_jwt_extended import get_jwt_identity
 from app.utils.rbac import role_required
 from app.models.tasks import Task
 from app.models.audit import TaskAudit
+from app.models.user import User
 from app import db
 from enum import Enum
 from app.utils.response import success_response,error_response
 from app.utils.audit import log_task_action
 from datetime import datetime
+from sqlalchemy import or_
 
 
 tasks_bp=Blueprint('tasks',__name__)
 
+#create task
 @tasks_bp.route('/tasks',methods=['POST'])
 @role_required('MANAGER','ADMIN')
 def create_task():
@@ -38,6 +41,7 @@ def create_task():
         status_code=201
     )
 
+#view task
 @tasks_bp.route('/tasks',methods=['GET'])
 @role_required('USER','MANAGER','ADMIN')
 def view_task():
@@ -59,7 +63,14 @@ def view_task():
         base_query=Task.query.filter_by(is_deleted=False)
 
     elif current_user.role=="MANAGER":
-        base_query=Task.query.filter_by(created_by=current_user.id,is_deleted=False)
+        subordinate_ids=[user.id for user in current_user.subordinates]
+        base_query=Task.query.filter(
+            Task.is_deleted==False,
+            or_(
+                Task.assigned_to.in_(subordinate_ids),
+                Task.created_by==current_user.id
+            )
+        )
     else:
         base_query=Task.query.filter_by(assigned_to=current_user.id,is_deleted=False)
 
@@ -123,6 +134,7 @@ def view_task():
         status_code=200
     )
 
+#update status
 @tasks_bp.route('/tasks/<int:task_id>/status',methods=['PATCH'])
 @role_required('USER','MANAGER','ADMIN')
 def update_task(task_id):
@@ -163,11 +175,14 @@ def update_task(task_id):
         status_code=200
     )
 
+#assign task
 @tasks_bp.route('/tasks/<task_id>/assign', methods=["PUT"])
 @role_required("MANAGER","ADMIN")
 def assign_task(task_id):
     data=request.get_json(silent=True)
     current_user_id=int(get_jwt_identity())
+    current_user=User.query.get(current_user_id)
+
     if not data or "user_id" not in data:
         return error_response(
             message="User_id required",
@@ -180,26 +195,34 @@ def assign_task(task_id):
             message="Task not found",
             status_code=404
         )
+        
     
-    from app.models.user import User
-    user=User.query.get(data['user_id'])
+    assigned_user=User.query.get(data['user_id'])
 
-    if not user:
+    if not assigned_user:
         return error_response(
             message="User not found",
             status_code=404
         )
+    if current_user.role=="MANAGER":
+        if assigned_user.role!="USER":
+            return error_response("Managers can assign only to users",403)
+        
+        if assigned_user.manager_id!=current_user.id:
+            return error_response("Cannot assign outside your team",403)
+        
     
-    task.assigned_to=user.id
+    task.assigned_to=assigned_user.id
     log_task_action(task_id,"ASSIGN",current_user_id)
     db.session.commit()
 
     return success_response(
         message="Task assigned successfully",
-        data={"task_id":task_id,"assigned_to":task.assigned_to},
+        data={"task_id":task_id,"assigned_to":assigned_user.id},
         status_code=200
     )
 
+#delete task
 @tasks_bp.route('/tasks/<task_id>/delete',methods=['DELETE'])
 @role_required("MANAGER","ADMIN")
 def delete_task(task_id):
@@ -227,7 +250,7 @@ def delete_task(task_id):
         status_code=200
     )
 
-
+#restore task
 @tasks_bp.route("/tasks/<int:task_id>/restore",methods=["PATCH"])
 @role_required("ADMIN")
 def restore(task_id):
@@ -249,6 +272,7 @@ def restore(task_id):
         status_code=200
     )
 
+#audit logging
 @tasks_bp.route('/tasks/<int:task_id>/audit',methods=['GET'])
 @role_required("ADMIN")
 def veiw_audit(task_id):
