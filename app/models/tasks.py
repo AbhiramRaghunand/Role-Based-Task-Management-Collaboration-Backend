@@ -9,7 +9,7 @@ class Task(db.Model):
     description=db.Column(db.Text,nullable=False)
     status=db.Column(db.String(20),default="PENDING",nullable=False)
     created_by=db.Column(db.Integer,nullable=False)
-    created_at=db.Column(db.DateTime,default=datetime.now())
+    created_at=db.Column(db.DateTime,default=datetime.now)
     assigned_to=db.Column(db.Integer,db.ForeignKey("users.id"),nullable=True)
     is_deleted=db.Column(db.Boolean,default=False,nullable=False)
     deleted_at=db.Column(db.DateTime,nullable=True)

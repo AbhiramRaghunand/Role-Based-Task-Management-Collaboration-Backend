@@ -12,14 +12,20 @@ import os
 jwt=JWTManager()
 migrate=Migrate()
 
-def create_app():
+def create_app(config_name=None):
     load_dotenv()
 
     app=Flask(__name__)
 
-    app.config['SQLALCHEMY_DATABASE_URI']=os.getenv('DATABASE_URI')
+    if config_name=="testing":
+        app.config["TESTING"]=True
+        app.config["SQLALCHEMY_DATABASE_URI"]="sqlite:///:memory:"
+    else:
+        app.config['SQLALCHEMY_DATABASE_URI']=os.getenv('DATABASE_URI')
+        
     app.config['JWT_SECRET_KEY']=os.getenv('JWT_SECRET_KEY')
-
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"]=False
+    
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
@@ -47,6 +53,8 @@ def create_app():
     @app.errorhandler(400)
     def bad_request_error(error):
         return error_response('Bad request',400)
+    
+    # print(app.url_map)
 
     @app.route('/')
     def home():

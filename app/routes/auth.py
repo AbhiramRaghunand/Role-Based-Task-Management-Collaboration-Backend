@@ -27,7 +27,7 @@ def signup():
         if not manager_id:
             return error_response("Manager ID required",400)
         
-        manager=User.query.get(manager_id)
+        manager=db.session.get(User,manager_id)
 
         if not manager:
             return error_response("Manager not found",404)
@@ -102,7 +102,7 @@ def login():
 @jwt_required()
 def protected():
     current_user_id=get_jwt_identity()
-    current_user=User.query.get(current_user_id)
+    current_user=db.session.get(User,current_user_id)
 
     return success_response(
     message="User profile retrieved successfully",

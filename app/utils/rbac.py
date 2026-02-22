@@ -2,6 +2,7 @@ from functools import wraps
 from flask import jsonify
 from flask_jwt_extended import verify_jwt_in_request,get_jwt_identity
 from app.utils.response import success_response,error_response
+from app import db
 
 
 def role_required(*allowed_roles):
@@ -16,7 +17,7 @@ def role_required(*allowed_roles):
 
             #get current user identity
             user_id=get_jwt_identity()
-            user=User.query.get(int(user_id))
+            user=db.session.get(User,int(user_id))
 
             if not user:
                 return error_response(

@@ -36,10 +36,17 @@ def create_task():
     db.session.commit()
 
     return success_response(
-        message="Task created successfully",
-        data={"task_id":task.id},
-        status_code=201
-    )
+    message="Task created successfully",
+    data={
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "status": task.status,
+        "assigned_to": task.assigned_to,
+        "created_by": task.created_by
+    },
+    status_code=201
+)
 
 #view task
 @tasks_bp.route('/tasks',methods=['GET'])
@@ -47,7 +54,7 @@ def create_task():
 def view_task():
     from app.models.user import User
     current_user_id=int(get_jwt_identity())
-    current_user=User.query.get(current_user_id)
+    current_user=db.session.get(User,current_user_id)
 
     page=request.args.get("page",1,type=int)
     limit=request.args.get("limit",5,type=int)
@@ -157,7 +164,7 @@ def update_task(task_id):
             status_code=400
         )
     
-    task=Task.query.filter_by(id=task_id,is_deleted=False)
+    task=Task.query.filter_by(id=task_id,is_deleted=False).first()
 
     if not task:
         return error_response(
@@ -166,22 +173,22 @@ def update_task(task_id):
         )
     
     task.status=new_status
-    log_task_action(task_id,"UPDATE_STATUS",current_user_id)
+    log_task_action(task.id,"UPDATE_STATUS",current_user_id)
     db.session.commit()
 
     return success_response(
         message="Task status updated successfully",
-        data={"task_id":task_id,"new_status":new_status},
+        data={"task_id":task_id,"status":new_status},
         status_code=200
     )
 
 #assign task
-@tasks_bp.route('/tasks/<task_id>/assign', methods=["PUT"])
+@tasks_bp.route('/tasks/<int:task_id>/assign', methods=["PUT"])
 @role_required("MANAGER","ADMIN")
 def assign_task(task_id):
     data=request.get_json(silent=True)
     current_user_id=int(get_jwt_identity())
-    current_user=User.query.get(current_user_id)
+    current_user=db.session.get(User,current_user_id)
 
     if not data or "user_id" not in data:
         return error_response(
@@ -189,15 +196,15 @@ def assign_task(task_id):
             status_code=400
         )
     
-    task=Task.query.filter_by(id=task_id,is_deleted=False)
+    task=Task.query.filter_by(id=task_id,is_deleted=False).first()
     if not task:
         return error_response(
             message="Task not found",
             status_code=404
         )
-        
+
     
-    assigned_user=User.query.get(data['user_id'])
+    assigned_user=db.session.get(User,data['user_id'])
 
     if not assigned_user:
         return error_response(
@@ -205,6 +212,9 @@ def assign_task(task_id):
             status_code=404
         )
     if current_user.role=="MANAGER":
+        if task.created_by!=current_user.id:
+            return error_response("You cannot modify tasks outside your scope",403)
+        
         if assigned_user.role!="USER":
             return error_response("Managers can assign only to users",403)
         
@@ -213,7 +223,7 @@ def assign_task(task_id):
         
     
     task.assigned_to=assigned_user.id
-    log_task_action(task_id,"ASSIGN",current_user_id)
+    log_task_action(task.id,"ASSIGN",current_user_id)
     db.session.commit()
 
     return success_response(
@@ -223,13 +233,13 @@ def assign_task(task_id):
     )
 
 #delete task
-@tasks_bp.route('/tasks/<task_id>/delete',methods=['DELETE'])
+@tasks_bp.route('/tasks/<int:task_id>/delete',methods=['DELETE'])
 @role_required("MANAGER","ADMIN")
 def delete_task(task_id):
 
     from app.models.user import User
     current_user_id=int(get_jwt_identity())
-    current_user=User.query.get(current_user_id)
+    current_user=db.session.get(User,current_user_id)
 
     task=Task.query.filter_by(id=task_id,is_deleted=False).first()
 
@@ -241,7 +251,7 @@ def delete_task(task_id):
     
     task.is_deleted=True
     task.deleted_at=datetime.now()
-    log_task_action(task_id,"DELETE",current_user_id)
+    log_task_action(task.id,"DELETE",current_user_id)
     db.session.commit()
 
     return success_response(
@@ -263,7 +273,7 @@ def restore(task_id):
     
     task.is_deleted=False
     task.deleted_at=None
-    log_task_action(task_id,"RESTORE",current_user_id)
+    log_task_action(task.id,"RESTORE",current_user_id)
     db.session.commit()
 
     return success_response(
